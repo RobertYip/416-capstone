@@ -3,9 +3,10 @@ import threading
 import json
 
 # message commands
-VIEW = "view"
+VIEW = "v"
+NEXT_STAGE = "next"
 
-# states:
+# stage:
 STAGE0 = 0 # discovery phase
 STAGE1 = 1 # pre-leader election
 STAGE2 = 2 # leader election
@@ -16,6 +17,7 @@ CODE_LEN = 4
 PORT_LEN = 4
 GET_SESSION_DATA = '0001'
 NODE_INTRODUCTION = '0002'
+UPDATE_STAGE = '0003'
 OK = '00OK'
 NO = '00NO'
 
@@ -36,7 +38,7 @@ class Play:
         self.port = port
         self.initial_connection = None
         self.leader = None
-        self.state = 0
+        self.stage = 0
         self.nodes_list = []
         self.socket_connections = []
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -64,6 +66,10 @@ class Play:
                         self.nodes_list.append(node_obj)
                         print(f"Successfully added node {node_obj['id']} to nodes_list")
                         client_socket.send(OK.encode('utf-8'))
+                elif message[:CODE_LEN] == UPDATE_STAGE:
+                    # Update stage
+                    self.stage = int(message[CODE_LEN:len(message)])
+                    print(f"Stage updated to {self.stage}")                        
                 else:
                     print(f"Received message from {name}: {message}")
         except Exception as e:
@@ -90,6 +96,9 @@ class Play:
     HELPERS
     """
     def broadcast_message(self, message):
+        """
+        Broadcasts a message to all socket connections
+        """
         for socket in self.socket_connections:
             socket.send(message.encode('utf-8'))
 
@@ -100,7 +109,7 @@ class Play:
         """
         session_obj = {
             'leader': self.leader,
-            'state': self.state,
+            'stage': self.stage,
             'nodes_list': self.nodes_list
         }
         return session_obj
@@ -108,7 +117,7 @@ class Play:
     def get_session_data(self, client_socket):
         """
         Fetches the session data to find list of nodes and leader
-        - state
+        - stage
         - leader
         - all nodes list
         Updates self.nodes_list
@@ -121,7 +130,7 @@ class Play:
         try:
             session_data_json = json.loads(message)
             self.leader = session_data_json['leader']
-            self.state = session_data_json['state']
+            self.stage = session_data_json['stage']
             self.nodes_list = session_data_json['nodes_list']
             
             print("Successfully retrieved session data")
@@ -150,6 +159,19 @@ class Play:
                 client_socket.connect(('localhost', node['port']))
                 self.socket_connections.append(client_socket)
 
+    def print_view(self):
+        """
+        Prints the status on the network
+        """
+        print("connections: " + str(self.socket_connections))
+        print("len_connections: " + str(len(self.socket_connections)))
+        print("nodes_list: " + str(self.nodes_list))
+        print("id: " + self.id)
+        print("name: " + self.name)
+        print("port: " + str(self.port))
+        print("leader: " + str(self.leader))
+        print("stage: " + str(self.stage))
+    
     """
     PROCEDURES
     """
@@ -197,6 +219,14 @@ class Play:
          
         return True
 
+
+    def update_all_nodes_stage(self, stage):
+        """
+        Updates non-leader nodes stage
+        """
+        self.broadcast_message(UPDATE_STAGE+str(stage))
+
+
     def start(self):
         self.socket.bind(('localhost', self.port))
         self.socket.listen()
@@ -210,16 +240,13 @@ class Play:
         while not is_joined:
             is_joined = self.init_join_procedures()
         
-        while self.state==STAGE0:
+        while self.stage==STAGE0:
             command = input("Enter your command: ")
             if command == VIEW:
-                print("connections: " + str(self.socket_connections))
-                print("len_connections: " + str(len(self.socket_connections)))
-                print("nodes_list: " + str(self.nodes_list))
-                print("id: " + self.id)
-                print("name: " + self.name)
-                print("port: " + str(self.port))
-                print("leader: " + str(self.leader))
+                self.print_view()
+            elif command == NEXT_STAGE and self.leader == self.port:
+                self.stage += 1
+                self.update_all_nodes_stage(self.stage)
             else:
                 self.broadcast_message(command)
 
