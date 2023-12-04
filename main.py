@@ -2,6 +2,9 @@ import socket
 import threading
 import json
 
+# message commands
+VIEW = "view"
+
 # states:
 STAGE0 = 0 # discovery phase
 STAGE1 = 1 # pre-leader election
@@ -11,14 +14,11 @@ STAGE3 = 3 # message exchange
 # constants
 CODE_LEN = 4
 PORT_LEN = 4
-
-# message key words:
+GET_SESSION_DATA = '0001'
+NODE_INTRODUCTION = '0002'
 OK = '00OK'
 NO = '00NO'
 
-# message commands
-GET_SESSION_DATA = '0001'
-NODE_INTRODUCTION = '0002'
 
 """
 Interface info for reference (Python doesn't have interfaces)
@@ -212,7 +212,7 @@ class Play:
         
         while self.state==STAGE0:
             command = input("Enter your command: ")
-            if command == "view":
+            if command == VIEW:
                 print("connections: " + str(self.socket_connections))
                 print("len_connections: " + str(len(self.socket_connections)))
                 print("nodes_list: " + str(self.nodes_list))
