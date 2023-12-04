@@ -34,6 +34,7 @@ class Play:
         self.id = None
         self.name = None
         self.port = port
+        self.initial_connection = None
         self.leader = None
         self.state = 0
         self.nodes_list = []
@@ -60,12 +61,10 @@ class Play:
                     if any(node['id'] == node_obj['id'] for node in self.nodes_list):
                         client_socket.send(NO.encode('utf-8'))
                     else:
-                        self.socket_connections.append(client_socket)
                         self.nodes_list.append(node_obj)
                         print(f"Successfully added node {node_obj['id']} to nodes_list")
                         client_socket.send(OK.encode('utf-8'))
                 else:
-                    input("PAUSE")
                     print(f"Received message from {name}: {message}")
         except Exception as e:
             print(f"Error handling client: {e}")
@@ -141,6 +140,15 @@ class Play:
         }
         return node_obj
 
+    def connect_to_all_nodes(self):
+        """
+        Connects to all nodes in the nodes_list
+        """
+        for node in self.nodes_list:
+            if node['port'] != self.port and node['port'] != self.initial_connection:
+                client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client_socket.connect(('localhost', node['port']))
+                self.socket_connections.append(client_socket)
 
     """
     PROCEDURES
@@ -159,15 +167,16 @@ class Play:
         self.name = str(input("Enter your name: "))
         self.id = self.name+str(self.port)
 
-        self.leader = int(input("Enter the node you want to connect to [0 if you are host]: "))
-        if self.leader == 0 or self.leader == self.port:
+        self.initial_connection = int(input("Enter the node you want to connect to [0 if you are host]: "))
+        if self.initial_connection == 0 or self.initial_connection == self.port:
             # Identify self as host
             self.leader = self.port
             self.nodes_list = [self.share_node_data()]
         else:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket.connect(('localhost', self.leader))
-            
+            client_socket.connect(('localhost', self.initial_connection))
+            self.socket_connections.append(client_socket)
+
             # Introduce self and check if join successful
             self_data_str = json.dumps(self.share_node_data())
 
@@ -182,6 +191,9 @@ class Play:
 
             # Get list of nodes in session
             self.get_session_data(client_socket)
+
+            # Connecto all other nodes
+            self.connect_to_all_nodes()
          
         return True
 
