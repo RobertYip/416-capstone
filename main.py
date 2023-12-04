@@ -12,9 +12,11 @@ STAGE3 = 3 # message exchange
 CODE_LEN = 4
 PORT_LEN = 4
 
-# message commands:
-OK = '0000OK'
-NO = '0000NO'
+# message key words:
+OK = '00OK'
+NO = '00NO'
+
+# message commands
 GET_SESSION_DATA = '0001'
 NODE_INTRODUCTION = '0002'
 
@@ -36,34 +38,55 @@ class Play:
         self.state = 0
         self.nodes_list = []
         self.socket_connections = []
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind(('localhost', self.port))
-        self.server_socket.listen()
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.lock = threading.Lock()
 
-    def receive_messages(self):
-        client_socket, client_address = self.server_socket.accept()
-        name = None
-        while True:
-            message = client_socket.recv(1024).decode('utf-8')
+    def handle_client(self, client_socket):
+        try:
+            name = None
+            while True:
+                message = client_socket.recv(1024).decode('utf-8')
+                if not message:
+                    break  # Connection closed by the client
 
-            if message[:CODE_LEN] == GET_SESSION_DATA:
-                # provide session data to requesting node
-                session_data_str = json.dumps(self.create_session_data())
-                client_socket.send(session_data_str.encode('utf-8'))
-            elif message[:CODE_LEN] == NODE_INTRODUCTION:
-                # Get node info and append it to node_list
-                node_obj = json.loads(message[CODE_LEN:len(message)])
-                # check if node already exists in list
-                if any(node['id'] == node_obj['id'] for node in self.nodes_list):
-                    client_socket.send(NO.encode('utf-8'))
+                if message[:CODE_LEN] == GET_SESSION_DATA:
+                    # provide session data to requesting node
+                    session_data_str = json.dumps(self.create_session_data())
+                    client_socket.send(session_data_str.encode('utf-8'))
+                elif message[:CODE_LEN] == NODE_INTRODUCTION:
+                    # Get node info and append it to node_list
+                    node_obj = json.loads(message[CODE_LEN:len(message)])
+                    # check if node already exists in list
+                    if any(node['id'] == node_obj['id'] for node in self.nodes_list):
+                        client_socket.send(NO.encode('utf-8'))
+                    else:
+                        self.socket_connections.append(client_socket)
+                        self.nodes_list.append(node_obj)
+                        print(f"Successfully added node {node_obj['id']} to nodes_list")
+                        client_socket.send(OK.encode('utf-8'))
                 else:
-                    self.nodes_list.append(node_obj)
-                    print(f"Successfully added node {node_obj['id']} to nodes_list")
-                    client_socket.send(OK.encode('utf-8'))
-            else:
-                input("PAUSE")
-                print(f"Received message from {name}: {message}")
-            
+                    input("PAUSE")
+                    print(f"Received message from {name}: {message}")
+        except Exception as e:
+            print(f"Error handling client: {e}")
+        finally:
+            # Remove the client socket from the list
+            with self.lock:
+                self.socket_connections.remove(client_socket)
+            client_socket.close()
+
+    def accept_connections(self):
+        while True:
+            client_socket, client_address = self.socket.accept()
+            print(f"Accepted connection from {client_address}")
+
+            # Add the new client to the list of connections
+            with self.lock:
+                self.socket_connections.append(client_socket)
+
+            # Start a new thread to handle the client
+            threading.Thread(target=self.handle_client, args=(client_socket,)).start()
+
     """
     HELPERS
     """
@@ -163,13 +186,12 @@ class Play:
         return True
 
     def start(self):
+        self.socket.bind(('localhost', self.port))
+        self.socket.listen()
         print(f"Node {self.port} is listening for incoming connections.")
 
-        # Handle receiving messages from up to 3 nodes
-        receive_thread1 = threading.Thread(target=self.receive_messages)
-        receive_thread2 = threading.Thread(target=self.receive_messages)
-        receive_thread1.start()
-        receive_thread2.start()
+        # Start a thread to handle incoming connections
+        threading.Thread(target=self.accept_connections).start()
 
         # Join procedures
         is_joined = False
@@ -180,6 +202,7 @@ class Play:
             command = input("Enter your command: ")
             if command == "view":
                 print("connections: " + str(self.socket_connections))
+                print("len_connections: " + str(len(self.socket_connections)))
                 print("nodes_list: " + str(self.nodes_list))
                 print("id: " + self.id)
                 print("name: " + self.name)
