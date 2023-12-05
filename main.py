@@ -3,8 +3,8 @@ import threading
 import json
 
 # message commands
-VIEW = "v"
-NEXT_STAGE = "next"
+VIEW = "V"
+NEXT_STAGE = "N"
 MESSAGE_LOG = "M"
 
 # stage:
@@ -43,7 +43,7 @@ class Play:
 
     def handle_client(self, client_socket, name=None):
         """
-        After connection is establishes, handles messages received
+        After connection is established, handles messages received
         """
         try:
             while True:
@@ -99,6 +99,9 @@ class Play:
 
 
     def accept_connections(self):
+        """
+        Accepts connections and organizes socket connections
+        """
         while True:
             client_socket, client_address = self.socket.accept()
             # Exchange names
@@ -112,6 +115,7 @@ class Play:
 
             # Start a new thread to handle the client
             threading.Thread(target=self.handle_client, args=(client_socket, name)).start()
+
 
     """
     HELPERS
@@ -218,6 +222,7 @@ class Play:
         print("port: " + str(self.port))
         print("leader: " + str(self.leader))
         print("stage: " + str(self.stage))
+    
     
     def print_message_log(self):
         """
