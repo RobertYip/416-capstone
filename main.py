@@ -5,6 +5,7 @@ import json
 # message commands
 VIEW = "v"
 NEXT_STAGE = "next"
+MESSAGE_LOG = "M"
 
 # stage:
 STAGE0 = 0 # discovery phase
@@ -18,6 +19,8 @@ PORT_LEN = 4
 GET_SESSION_DATA = '0001'
 NODE_INTRODUCTION = '0002'
 UPDATE_STAGE = '0003'
+MESSAGE = '0004'
+LOG_UPDATE = '0005'
 OK = '00OK'
 NO = '00NO'
 
@@ -35,6 +38,7 @@ class Play:
         self.socket_leader = None
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.lock = threading.Lock()
+        self.message_log = []
 
 
     def handle_client(self, client_socket, name=None):
@@ -47,24 +51,46 @@ class Play:
                 if not message:
                     break  # Connection closed by the client
 
-                if message[:CODE_LEN] == GET_SESSION_DATA:
+                if message[:CODE_LEN] == MESSAGE:
+                    # if leader
+                    if self.leader == self.port:
+                        self.message_log.append((name, message[CODE_LEN:]))
+                        message_log_str = json.dumps(self.message_log)
+                        self.broadcast_message(LOG_UPDATE+message_log_str)
+                    else:
+                    # if not leader, relay to leader
+                        self.relay_message_to_leader(message)
+
+                elif message[:CODE_LEN] == LOG_UPDATE:
+                    # update message log
+                    json_obj = json.loads(message[CODE_LEN:])
+
+                    self.fast_forward_message_log(json_obj)
+
+                elif message[:CODE_LEN] == GET_SESSION_DATA:
                     # provide session data to requesting node
                     session_data_str = json.dumps(self.create_session_data())
                     client_socket.send(session_data_str.encode('utf-8'))
+
                 elif message[:CODE_LEN] == NODE_INTRODUCTION:
                     # Get node info and append it to node_list
-                    node_obj = json.loads(message[CODE_LEN:len(message)])
+                    node_obj = json.loads(message[CODE_LEN:])
                     self.nodes_list.append(node_obj)
                     client_socket.send(OK.encode('utf-8'))
                     print(f"Successfully added node {node_obj['id']} to nodes_list")
+
                 elif message[:CODE_LEN] == UPDATE_STAGE:
                     # Update stage
-                    self.stage = int(message[CODE_LEN:len(message)])
-                    print(f"Stage updated to {self.stage}")                        
-                else:
-                    print(f"{name}: {message}")
+                    self.stage = int(message[CODE_LEN:])
+                    print(f"Stage updated to {self.stage}")
+
+                # else:
+                #     print(f"{name}: {message}")
+
         except Exception as e:
             print(f"Error handling client: {e}")
+            print(f"Closing connection with {name}")
+
         finally:
             # Remove the client socket from the list
             with self.lock:
@@ -96,6 +122,24 @@ class Play:
         """
         for socket in self.socket_connections:
             socket.send(message.encode('utf-8'))
+
+
+    def relay_message_to_leader(self, message):
+        """
+        Leader is in position 0, relay message to leader
+        """
+        leader_socket = self.socket_connections[0]
+        leader_socket.send(message.encode('utf-8'))
+
+
+    def fast_forward_message_log(self, new_message_log):    
+        """
+        Fast forward the message log
+        This part is simplified and not optimized, but it's for the idea
+        """
+        offset = len(new_message_log) - len(self.message_log)
+        for i in range(len(new_message_log)-offset, len(new_message_log)):
+            self.message_log.append(new_message_log[i]) 
 
     def create_session_data(self):
         """
@@ -144,6 +188,7 @@ class Play:
         }
         return node_obj
 
+
     def connect_to_all_nodes(self):
         """
         Connects to all nodes in the nodes_list
@@ -173,6 +218,15 @@ class Play:
         print("leader: " + str(self.leader))
         print("stage: " + str(self.stage))
     
+    def print_message_log(self):
+        """
+        Prints the message log
+        """
+        print("Full Message Log History")
+        for message in self.message_log:
+            print(message[0] + ": " + message[1])
+        print("End of Log\n")
+        
 
     """
     PROCEDURES
@@ -246,12 +300,21 @@ class Play:
                 self.print_view()
             elif command == NEXT_STAGE and self.leader == self.port:
                 self.stage = STAGE3 # assume host remains leader
-                self.update_all_nodes_stage(self.stage)
-            else:
-                self.broadcast_message(command)
+                self.update_all_nodes_stage(self.stage)               
 
         while self.stage==STAGE3:
-            pass
+            command = input()
+            if command == VIEW:
+                self.print_view()
+            elif command == MESSAGE_LOG:
+                self.print_message_log()
+            else:
+                if self.port == self.leader:
+                    self.message_log.append((self.name, command))
+                    self.broadcast_message((LOG_UPDATE+json.dumps(self.message_log)))
+                else:
+                    self.broadcast_message(MESSAGE+command)
+
 
 if __name__ == "__main__":
     port = int(input("Enter your node's port (8001-8005): "))
