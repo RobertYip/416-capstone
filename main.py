@@ -44,9 +44,8 @@ class Play:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.lock = threading.Lock()
 
-    def handle_client(self, client_socket):
+    def handle_client(self, client_socket, name=None):
         try:
-            name = None
             while True:
                 message = client_socket.recv(1024).decode('utf-8')
                 if not message:
@@ -59,19 +58,15 @@ class Play:
                 elif message[:CODE_LEN] == NODE_INTRODUCTION:
                     # Get node info and append it to node_list
                     node_obj = json.loads(message[CODE_LEN:len(message)])
-                    # check if node already exists in list
-                    if any(node['id'] == node_obj['id'] for node in self.nodes_list):
-                        client_socket.send(NO.encode('utf-8'))
-                    else:
-                        self.nodes_list.append(node_obj)
-                        print(f"Successfully added node {node_obj['id']} to nodes_list")
-                        client_socket.send(OK.encode('utf-8'))
+                    self.nodes_list.append(node_obj)
+                    client_socket.send(OK.encode('utf-8'))
+                    print(f"Successfully added node {node_obj['id']} to nodes_list")
                 elif message[:CODE_LEN] == UPDATE_STAGE:
                     # Update stage
                     self.stage = int(message[CODE_LEN:len(message)])
                     print(f"Stage updated to {self.stage}")                        
                 else:
-                    print(f"Received message from {name}: {message}")
+                    print(f"{name}: {message}")
         except Exception as e:
             print(f"Error handling client: {e}")
         finally:
@@ -83,14 +78,17 @@ class Play:
     def accept_connections(self):
         while True:
             client_socket, client_address = self.socket.accept()
-            print(f"Accepted connection from {client_address}")
+            # Exchange names
+            name = client_socket.recv(1024).decode('utf-8')
+            client_socket.send(self.name.encode('utf-8'))
+            print(f"Accepted connection from {name}")
 
             # Add the new client to the list of connections
             with self.lock:
                 self.socket_connections.append(client_socket)
 
             # Start a new thread to handle the client
-            threading.Thread(target=self.handle_client, args=(client_socket,)).start()
+            threading.Thread(target=self.handle_client, args=(client_socket, name)).start()
 
     """
     HELPERS
@@ -125,8 +123,6 @@ class Play:
         client_socket.send(GET_SESSION_DATA.encode('utf-8'))
         message = client_socket.recv(1024).decode('utf-8')
 
-        # Try decoding the string as JSON
-        session_data_json=None
         try:
             session_data_json = json.loads(message)
             self.leader = session_data_json['leader']
@@ -157,6 +153,10 @@ class Play:
             if node['port'] != self.port and node['port'] != self.initial_connection:
                 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 client_socket.connect(('localhost', node['port']))
+                client_socket.send(self.name.encode('utf-8'))
+                name = client_socket.recv(1024).decode('utf-8')
+
+                threading.Thread(target=self.handle_client, args=(client_socket, name)).start()
                 self.socket_connections.append(client_socket)
 
     def print_view(self):
@@ -195,8 +195,14 @@ class Play:
             self.leader = self.port
             self.nodes_list = [self.share_node_data()]
         else:
+            # Initial connection
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_socket.connect(('localhost', self.initial_connection))
+
+            # Exchange names
+            client_socket.send(self.name.encode('utf-8'))   
+            name = client_socket.recv(1024).decode('utf-8')
+            print("205: " + name)
             self.socket_connections.append(client_socket)
 
             # Introduce self and check if join successful
@@ -204,17 +210,10 @@ class Play:
 
             client_socket.send((NODE_INTRODUCTION+self_data_str).encode('utf-8'))
             message = client_socket.recv(1024).decode('utf-8')
-
-            if message == OK:
-                print("Successfully joined network")
-            else:
-                print("Error joining network")
-                return False
-
-            # Get list of nodes in session
+            
             self.get_session_data(client_socket)
+            threading.Thread(target=self.handle_client, args=(client_socket, name)).start()
 
-            # Connecto all other nodes
             self.connect_to_all_nodes()
          
         return True
@@ -241,7 +240,7 @@ class Play:
             is_joined = self.init_join_procedures()
         
         while self.stage==STAGE0:
-            command = input("Enter your command: ")
+            command = input()
             if command == VIEW:
                 self.print_view()
             elif command == NEXT_STAGE and self.leader == self.port:
