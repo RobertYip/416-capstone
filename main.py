@@ -185,6 +185,7 @@ class Play:
             'id': self.id,
             'name': self.name,
             'port': self.port,
+            'stage': self.stage
         }
         return node_obj
 
