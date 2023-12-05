@@ -22,15 +22,6 @@ OK = '00OK'
 NO = '00NO'
 
 
-"""
-Interface info for reference (Python doesn't have interfaces)
-    node_obj = {
-        'id': self.id,
-        'name': self.name,
-        'port': self.port,
-    }
-"""
-
 class Play:
     def __init__(self, port):
         self.id = None
@@ -41,10 +32,15 @@ class Play:
         self.stage = 0
         self.nodes_list = []
         self.socket_connections = []
+        self.socket_leader = None
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.lock = threading.Lock()
 
+
     def handle_client(self, client_socket, name=None):
+        """
+        After connection is establishes, handles messages received
+        """
         try:
             while True:
                 message = client_socket.recv(1024).decode('utf-8')
@@ -74,6 +70,7 @@ class Play:
             with self.lock:
                 self.socket_connections.remove(client_socket)
             client_socket.close()
+
 
     def accept_connections(self):
         while True:
@@ -112,6 +109,7 @@ class Play:
         }
         return session_obj
     
+
     def get_session_data(self, client_socket):
         """
         Fetches the session data to find list of nodes and leader
@@ -133,6 +131,7 @@ class Play:
         except json.JSONDecodeError:
             print("Error decoding JSON object")
 
+
     def share_node_data(self):
         """
         Provides all of the self node's data
@@ -148,6 +147,7 @@ class Play:
     def connect_to_all_nodes(self):
         """
         Connects to all nodes in the nodes_list
+        Also sets the leader socket
         """
         for node in self.nodes_list:
             if node['port'] != self.port and node['port'] != self.initial_connection:
@@ -158,6 +158,7 @@ class Play:
 
                 threading.Thread(target=self.handle_client, args=(client_socket, name)).start()
                 self.socket_connections.append(client_socket)
+            
 
     def print_view(self):
         """
@@ -172,6 +173,7 @@ class Play:
         print("leader: " + str(self.leader))
         print("stage: " + str(self.stage))
     
+
     """
     PROCEDURES
     """
@@ -202,7 +204,6 @@ class Play:
             # Exchange names
             client_socket.send(self.name.encode('utf-8'))   
             name = client_socket.recv(1024).decode('utf-8')
-            print("205: " + name)
             self.socket_connections.append(client_socket)
 
             # Introduce self and check if join successful
@@ -244,10 +245,13 @@ class Play:
             if command == VIEW:
                 self.print_view()
             elif command == NEXT_STAGE and self.leader == self.port:
-                self.stage += 1
+                self.stage = STAGE3 # assume host remains leader
                 self.update_all_nodes_stage(self.stage)
             else:
                 self.broadcast_message(command)
+
+        while self.stage==STAGE3:
+            pass
 
 if __name__ == "__main__":
     port = int(input("Enter your node's port (8001-8005): "))
