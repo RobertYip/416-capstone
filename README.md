@@ -1,9 +1,11 @@
 # 416-capstone: Peer-to-Peer Messaging App with Strong Consistency
-This is an implementation for my design on a **Peer-to-Peer messaging app with strong consistency**. The design can be found [here](https://github.students.cs.ubc.ca/CPSC416-2023W-T1/Capstone-Project-Designs/blob/main/ccea9b01434cd2660bd42421eb0df300.pdf).
+This is an implementation for my design on a [**Peer-to-Peer messaging app with strong consistency**](https://github.students.cs.ubc.ca/CPSC416-2023W-T1/Capstone-Project-Designs/blob/main/ccea9b01434cd2660bd42421eb0df300.pdf). 
+
+The message log that appears for each user will always be complete and in order. On restart after faults or recovery after partitions, the user will fast-forward to the full complete log. It turns out the final design closely resembles Raft.
 
 ## Commands
-V - View node's, such as this node's port, name, connections, stage.  
-M - View Message Log of chat, to the knowledge of this node. Available only in Stage 3.  
+V - View this node's status info, such as the node's port, name, connections, stage.  
+M - View Message Log of chat to the knowledge of this node. Available only in Stage 3.  
 N - Advances stage. Can only be executed by leader.  
 
 
@@ -20,5 +22,5 @@ N - Advances stage. Can only be executed by leader.
 4 Stages:
 1. Discovery Phase - Nodes should join at this time
 2. Pre-leader election phase - Confirms nodes are alive (automatic step)
-3. Leader election phase - Use Paxos to randomly select leader. This is skipped in the implementation, host remains leader.
+3. Leader election phase - Use Paxos to randomly select leader.
 4. Message Exchange Phase - Normal messaging app behavior. Type `M` to view messsage log. New nodes can still join at this time.
