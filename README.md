@@ -1,5 +1,5 @@
-# 416-capstone: Decentralized Messaging App with Strong Consistency
-This is an implementation for my design on a **Decentralized messaging app with strong consistency**. The design can be found [here](https://github.students.cs.ubc.ca/CPSC416-2023W-T1/Capstone-Project-Designs/blob/main/ccea9b01434cd2660bd42421eb0df300.pdf).
+# 416-capstone: Peer-to-Peer Messaging App with Strong Consistency
+This is an implementation for my design on a **Peer-to-Peer messaging app with strong consistency**. The design can be found [here](https://github.students.cs.ubc.ca/CPSC416-2023W-T1/Capstone-Project-Designs/blob/main/ccea9b01434cd2660bd42421eb0df300.pdf).
 
 ## Commands
 V - View node's, such as this node's port, name, connections, stage.  
